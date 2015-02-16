@@ -1,6 +1,25 @@
 import numpy as np
 
-class DiagonalCovariance:
+from copy import copy
+
+
+def row_vec(x):
+    x = x.ravel()
+    return np.atleast_2d(x)
+
+
+def col_vec(x):
+    return row_vec(x).T
+
+
+class Covariance:
+    def __copy__(self):
+        param = self.__dict__
+        new_cov = type(self)(**param)
+        return new_cov
+
+
+class DiagonalCovariance(Covariance):
     def __init__(self, variance):
         self.variance = variance
 
@@ -11,7 +30,7 @@ class DiagonalCovariance:
             return np.zeros((len(x1), len(x2)))
 
 
-class RandomInterceptCovariance:
+class RandomInterceptCovariance(Covariance):
     def __init__(self, variance):
         self.variance = variance
 
@@ -22,10 +41,29 @@ class RandomInterceptCovariance:
         return self.variance * np.ones((len(x1), len(x2)))
 
 
-class CompositeCovariance:
+class SquaredExpCovariance(Covariance):
+    def __init__(self, amplitude, lengthscale):
+        self.amplitude = amplitude
+        self.lengthscale = lengthscale
+
+    def __call__(self, x1, x2=None):
+        if x2 is None:
+            x2 = x1
+
+        r = col_vec(x1) - row_vec(x2)
+        k = -0.5 * (r / self.lengthscale) ** 2
+        return self.amplitude * np.exp(k)
+
+
+class CompositeCovariance(Covariance):
     def __init__(self, *components):
         self.components = components
 
     def __call__(self, x1, x2=None):
         all_C = [cov_fn(x1, x2) for cov_fn in self.components]
         return sum(all_C)
+
+    def __copy__(self):
+        copied_components = [copy(c) for c in self.components]
+        new_comp = CompositeCovariance(*copied_components)
+        return new_comp
