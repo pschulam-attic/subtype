@@ -5,6 +5,7 @@ import pandas as pd
 import scipy.stats as stats
 
 from collections import namedtuple, OrderedDict
+from copy import copy
 from patsy import dmatrix
 from scipy.linalg import solve
 from scipy.misc import logsumexp
@@ -108,6 +109,10 @@ class SubtypeMixture:
         self.basis = basis_fn
         self.cov = cov_fn
         self._init_params()
+
+    def __copy__(self):
+        return SubtypeMixture(
+            self.nsubtypes, self.ncovariates, copy(self.basis), copy(self.cov))
 
     def _init_params(self):
         self.subtype_marginal = LogisticRegression(
