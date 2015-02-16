@@ -21,3 +21,6 @@ class Basis:
 
     def __call__(self, x):
         return dmatrix(self.formula)
+
+    def __copy__(self):
+        return Basis(self.lower, self.upper, self.knots[:], self.degree)
