@@ -21,14 +21,17 @@ class DirichletMultinomial:
     def decrement(self, k):
         self.counts[k] -= 1
 
-    def sample(self):
+    def predictive_probs(self):
         p = self.counts + self.alpha
         p /= p.sum()
+        return p
+
+    def sample(self):
+        p = self.predictive_probs()
         return np.random.choice(self.K, p=p)
 
     def predictive_logpdf(self, k):
-        p = self.counts + self.alpha
-        p /= p.sum()
+        p = self.predictive_probs()
         return np.log(p[k])
 
 
@@ -156,4 +159,3 @@ class MarginalizedSubtypeMixture:
 
         self.Z = Z
         return self
-
