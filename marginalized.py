@@ -5,6 +5,7 @@ import scipy as sp
 import scipy.stats as stats
 
 from collections import namedtuple, OrderedDict
+from copy import copy
 from scipy.linalg import inv, solve
 from scipy.misc import logsumexp
 
@@ -33,6 +34,11 @@ class DirichletMultinomial:
     def predictive_logpdf(self, k):
         p = self.predictive_probs()
         return np.log(p[k])
+
+    def __copy__(self):
+        clone = DirichletMultinomial(self.K, self.alpha)
+        clone.counts = self.counts.copy()
+        return clone
 
 
 class BayesianRegression:
@@ -78,6 +84,13 @@ class BayesianRegression:
         ll = stats.multivariate_normal.logpdf(y, post_m, post_C)
         return ll
 
+    def __copy__(self):
+        clone = BayesianRegression(self.prior_mean, self.prior_cov)
+        clone.precision = self.precision.copy()
+        clone.unweighted_mean = self.unweighted_mean.copy()
+        clone.n = self.n
+        return clone
+
 
 class MarginalizedSubtypeMixture:
     def __init__(self, nsubtypes, alpha, basis_fn, cov_fn,
@@ -94,6 +107,20 @@ class MarginalizedSubtypeMixture:
 
     TrajectoryData = namedtuple(
         'TrajectoryData', ['X', 'C', 'cov_xx', 'cov_xy'])
+
+    def predict(self, trajectory):
+        X = self.basis(trajectory.t)
+        y_hat = np.zeros_like(trajectory.y)
+
+        for i in range(1, self.Z.shape[0]):
+            for k in range(self.nsubtypes):
+                w = np.exp(self.subtype_marginal.predictive_logpdf(k))
+                m = self.subtype_likelihoods[k].predictive_mean(X)
+                y_hat += w * m
+
+        y_hat /= self.Z.shape[0] - 1
+
+        y_hat
 
     def fit(self, trajectories, nsamples=1000, nburn=25):
 
@@ -124,6 +151,9 @@ class MarginalizedSubtypeMixture:
             self.subtype_likelihoods[z_i].increment(cov_xx, cov_xy)
 
         ## Sample from the posterior over assignments.
+
+        self._marginal_history = []
+        self._likelihoods_history = []
 
         for iter_ in range(1, nsamples + 1):
             logging.info('Starting iteration {}'.format(iter_))
@@ -156,6 +186,10 @@ class MarginalizedSubtypeMixture:
                     self.subtype_marginal.increment(z_i)
                     self.subtype_likelihoods[z_i].increment(cov_xx, cov_xy)
                     Z[iter_, i] = z_i
+
+            self._marginal_history.append(copy(self.subtype_marginal))
+            self._likelihoods_history.append(
+                [copy(m) for m in self.subtype_likelihoods])
 
         self.Z = Z
         return self
