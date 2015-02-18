@@ -8,7 +8,8 @@ __all__ = [
     'add_covariates',
     'truncate_trajectory',
     'predictive_contexts',
-    'Subtype_Model'
+    'Subtype_Model',
+    'MarginalizedSubtypeMixture'
 ]
 
 from .basis import Basis
@@ -23,3 +24,5 @@ from .subtype_model import (Trajectory,
                             truncate_trajectory,
                             predictive_contexts,
                             SubtypeMixture)
+
+from .marginalized import MarginalizedSubtypeMixture
