@@ -18,12 +18,12 @@ from .covariance import (DiagonalCovariance,
                          RandomInterceptCovariance,
                          CompositeCovariance)
 
-from .subtype_model import (Trajectory,
-                            SubtypeMixture)
+from .subtype_model import SubtypeMixture
 
 from .marginalized_subtype_model import MarginalizedSubtypeMixture
 
-from .util import (make_trajectories,
+from .util import (Trajectory,
+                   make_trajectories,
                    add_covariates,
                    truncate_trajectory,
                    predictive_contexts)

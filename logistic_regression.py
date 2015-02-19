@@ -2,6 +2,7 @@ import numpy as np
 
 from scipy.optimize import fmin_bfgs
 
+
 class LogisticRegression:
     def __init__(self, noutcomes, npredictors):
         self.noutcomes = noutcomes

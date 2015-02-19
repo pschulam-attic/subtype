@@ -1,8 +1,11 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
+from collections import namedtuple
 from patsy import dmatrix
 
-from .subtype_model import Trajectory
+
+Trajectory = namedtuple('Trajectory', ['key', 't', 'y', 'covariates'])
 
 
 def make_trajectories(key, time, marker, dataframe):

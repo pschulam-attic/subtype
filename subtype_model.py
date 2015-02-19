@@ -11,37 +11,7 @@ from scipy.linalg import solve
 from scipy.misc import logsumexp
 
 from .logistic_regression import LogisticRegression
-from .util import ConditionalPredictor
-
-
-Trajectory = namedtuple('Trajectory', ['key', 't', 'y', 'covariates'])
-
-
-class ConditionalPredictor:
-    def __init__(self, model, trajectory):
-        self.model = model
-        self.trajectory = trajectory
-
-    def predict(self, t_new):
-        y_new = self.model.predict(t_new, self.trajectory)
-        return y_new
-
-    def plot(self, ax=None, *args, **kwargs):
-        lower = self.model.basis.lower
-        upper = self.model.basis.upper
-        t_grid = np.linspace(lower, upper, 100)
-        y_grid = self.predict(t_grid)
-
-        if ax is None:
-            fig, ax = plt.subplots(*args, **kwargs)
-
-        else:
-            fig = ax.figure
-            
-        ax.plot(self.trajectory.t, self.trajectory.y, 'xb', label='Observed')
-        ax.plot(t_grid, y_grid, '-r', label='Predicted')
-
-        return fig, ax
+from .util import ConditionalPredictor, Trajectory
 
 
 class SubtypeMixture:
