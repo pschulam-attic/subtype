@@ -16,6 +16,7 @@ from .util import ConditionalPredictor
 
 Trajectory = namedtuple('Trajectory', ['key', 't', 'y', 'covariates'])
 
+
 class ConditionalPredictor:
     def __init__(self, model, trajectory):
         self.model = model
