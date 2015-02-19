@@ -9,7 +9,7 @@ from copy import copy
 from scipy.linalg import inv, solve
 from scipy.misc import logsumexp
 
-from .util import ConditionalPredictor
+from .util import ConditionalPredictor, mvnlogpdf
 
 
 class DirichletMultinomial:
@@ -47,7 +47,8 @@ class DirichletMultinomial:
 
 class BayesianRegression:
     __slots__ = ['prior_mean', 'prior_cov',
-                 'precision', 'unweighted_mean', 'n']
+                 'precision', 'unweighted_mean',
+                 'n', '_m_dirty', '_m', '_c_dirty', '_c']
     
     def __init__(self, mean, cov):
         self.prior_mean = mean.copy()
@@ -56,26 +57,38 @@ class BayesianRegression:
         self.precision = inv(cov)
         self.unweighted_mean = solve(cov, mean)
         self.n = 0
+        self._m_dirty = True
+        self._c_dirty = True
 
     def increment(self, cov_xx, cov_xy):
         self.precision += cov_xx
         self.unweighted_mean += cov_xy
         self.n += 1
+        self._m_dirty = True
+        self._c_dirty = True
 
     def decrement(self, cov_xx, cov_xy):
         self.precision -= cov_xx
         self.unweighted_mean -= cov_xy
         self.n -= 1
+        self._m_dirty = True
+        self._c_dirty = True
 
     @property
     def mean(self):
-        m = solve(self.precision, self.unweighted_mean).ravel()
-        return m
+        if self._m_dirty:
+            self._m = solve(self.precision, self.unweighted_mean).ravel()
+            self._m_dirty = False
+            
+        return self._m
 
     @property
     def cov(self):
-        c = inv(self.precision)
-        return c
+        if self._c_dirty:
+            self._c = inv(self.precision)
+            self._c_dirty = False
+            
+        return self._c
 
     def predictive_mean(self, X):
         m = X.dot(self.mean).ravel()
@@ -88,7 +101,7 @@ class BayesianRegression:
     def predictive_logpdf(self, X, y, C):
         post_m = self.predictive_mean(X)
         post_C = C + X.dot(self.cov).dot(X.T)
-        ll = stats.multivariate_normal.logpdf(y, post_m, post_C)
+        ll = mvnlogpdf(y, post_m, post_C)
         return ll
 
     def __copy__(self):
@@ -158,7 +171,7 @@ class MarginalizedSubtypeMixture:
     def conditional(self, trajectory):
         return ConditionalPredictor(self, trajectory)
 
-    def fit(self, trajectories, nsamples=1000, nburn=25):
+    def fit(self, trajectories, nsamples=1000, nthin=25):
 
         ## Precompute and store sufficient statistics.
 
@@ -195,8 +208,8 @@ class MarginalizedSubtypeMixture:
             logging.info('Starting iteration {}'.format(iter_))
             Z[iter_] = Z[iter_ - 1]
             
-            for burn_ in range(nburn):
-                logging.info('Burning {}:{}'.format(iter_, burn_))
+            for thin_ in range(nthin):
+                logging.info('Thinning {}:{}'.format(iter_, thin_))
                 
                 for i, trj in enumerate(trajectories):
                     z_i = Z[iter_, i]

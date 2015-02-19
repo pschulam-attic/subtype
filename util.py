@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from collections import namedtuple
+from numpy.linalg import cholesky, inv, slogdet
 from patsy import dmatrix
 
 
@@ -92,3 +93,13 @@ class ConditionalPredictor:
         ax.plot(t_grid, y_grid, '-r', label='Predicted')
 
         return fig, ax
+
+_LOG_2PI = np.log(2 * np.pi)
+
+def mvnlogpdf(x, mean, cov):
+    rank = len(x)
+    prec_U = cholesky(inv(cov))
+    log_det_cov = slogdet(cov)[1]
+    dev = x - mean
+    maha = np.sum(np.square(np.dot(dev, prec_U)))
+    return -0.5 * (rank * _LOG_2PI + log_det_cov + maha)
