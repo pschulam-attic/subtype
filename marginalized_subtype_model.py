@@ -5,11 +5,16 @@ import scipy as sp
 import scipy.stats as stats
 
 from collections import namedtuple, OrderedDict
+from copy import copy
 from scipy.linalg import inv, solve
 from scipy.misc import logsumexp
 
+from .util import ConditionalPredictor
+
 
 class DirichletMultinomial:
+    __slots__ = ['K', 'alpha', 'counts']
+    
     def __init__(self, K, alpha):
         self.K = K
         self.alpha = alpha
@@ -34,8 +39,16 @@ class DirichletMultinomial:
         p = self.predictive_probs()
         return np.log(p[k])
 
+    def __copy__(self):
+        clone = DirichletMultinomial(self.K, self.alpha)
+        clone.counts = self.counts.copy()
+        return clone
+
 
 class BayesianRegression:
+    __slots__ = ['prior_mean', 'prior_cov',
+                 'precision', 'unweighted_mean', 'n']
+    
     def __init__(self, mean, cov):
         self.prior_mean = mean.copy()
         self.prior_cov = cov.copy()
@@ -65,7 +78,7 @@ class BayesianRegression:
         return c
 
     def predictive_mean(self, X):
-        m = X.dot(self.mean)
+        m = X.dot(self.mean).ravel()
         return m
 
     def predictive_cov(self, X, C):
@@ -77,6 +90,13 @@ class BayesianRegression:
         post_C = C + X.dot(self.cov).dot(X.T)
         ll = stats.multivariate_normal.logpdf(y, post_m, post_C)
         return ll
+
+    def __copy__(self):
+        clone = BayesianRegression(self.prior_mean, self.prior_cov)
+        clone.precision = self.precision.copy()
+        clone.unweighted_mean = self.unweighted_mean.copy()
+        clone.n = self.n
+        return clone
 
 
 class MarginalizedSubtypeMixture:
@@ -92,8 +112,51 @@ class MarginalizedSubtypeMixture:
         new_br = lambda: BayesianRegression(prior_mean, prior_cov)
         self.subtype_likelihoods = [new_br() for _ in range(nsubtypes)]
 
+        self.samples = []
+
     TrajectoryData = namedtuple(
         'TrajectoryData', ['X', 'C', 'cov_xx', 'cov_xy'])
+
+    def _loglik(self, y, X, C, z, marg=None, lls=None):
+        marg = self.subtype_marginal if marg is None else marg
+        lls = self.subtype_likelihoods if lls is None else lls
+
+        lpz = marg.predictive_logpdf(z)
+        lpy = lls[z].predictive_logpdf(X, y, C)
+
+        return lpz + lpy
+
+    def _posterior(self, y, X, C, marg=None, lls=None):
+        marg = self.subtype_marginal if marg is None else marg
+        lls = self.subtype_likelihoods if lls is None else lls
+
+        subtype_joint_lls = [self._loglik(y, X, C, z, marg, lls)
+                             for z in range(self.nsubtypes)]
+        marginal_ll = logsumexp(subtype_joint_lls)
+        return np.exp(subtype_joint_lls - marginal_ll)
+
+    def predict(self, t_new, trajectory):
+        X_new = self.basis(t_new)
+        X_obs = self.basis(trajectory.t)
+        C1 = self.cov(t_new, trajectory.t)
+        C2 = self.cov(trajectory.t)
+        y_new = np.zeros_like(t_new)
+        y_obs = trajectory.y
+        nsamples = 0
+
+        for marg, lls in self.samples:
+            nsamples += 1
+            qz = self._posterior(y_obs, X_obs, C2, marg, lls)
+
+            for z, w in enumerate(qz):
+                m1 = lls[z].predictive_mean(X_new)
+                m2 = lls[z].predictive_mean(X_obs)
+                y_new += w * (m1 + C1.dot(solve(C2, y_obs - m2)).ravel())
+
+        return y_new / nsamples
+
+    def conditional(self, trajectory):
+        return ConditionalPredictor(self, trajectory)
 
     def fit(self, trajectories, nsamples=1000, nburn=25):
 
@@ -113,6 +176,7 @@ class MarginalizedSubtypeMixture:
         ## Initialize subtype marginal and likelihoods.
 
         Z = np.zeros((nsamples + 1, len(trajectories)), dtype=np.int64)
+        self.Z = Z
 
         for i, trj in enumerate(trajectories):
             z_i = self.subtype_marginal.sample()
@@ -124,6 +188,8 @@ class MarginalizedSubtypeMixture:
             self.subtype_likelihoods[z_i].increment(cov_xx, cov_xy)
 
         ## Sample from the posterior over assignments.
+
+        self.samples = []
 
         for iter_ in range(1, nsamples + 1):
             logging.info('Starting iteration {}'.format(iter_))
@@ -141,21 +207,18 @@ class MarginalizedSubtypeMixture:
                     self.subtype_likelihoods[z_i].decrement(cov_xx, cov_xy)
 
                     X = cache[trj.key].X
+                    C = cache[trj.key].C                    
                     y = trj.y
-                    C = cache[trj.key].C
-                    lp = np.zeros(self.nsubtypes)
-
-                    for k in range(self.nsubtypes):
-                        lp[k] += self.subtype_marginal.predictive_logpdf(k)
-                        lp[k] += self.subtype_likelihoods[k].\
-                                 predictive_logpdf(X, y, C)
-
-                    lp -= logsumexp(lp)
-                    z_i = np.random.choice(self.nsubtypes, p=np.exp(lp))
+                    
+                    p = self._posterior(y, X, C)
+                    z_i = np.random.choice(self.nsubtypes, p=p)
 
                     self.subtype_marginal.increment(z_i)
                     self.subtype_likelihoods[z_i].increment(cov_xx, cov_xy)
                     Z[iter_, i] = z_i
 
-        self.Z = Z
+            self.samples.append(
+                (copy(self.subtype_marginal),
+                 [copy(m) for m in self.subtype_likelihoods]))
+
         return self
