@@ -103,3 +103,10 @@ def mvnlogpdf(x, mean, cov):
     dev = x - mean
     maha = np.sum(np.square(np.dot(dev, prec_U)))
     return -0.5 * (rank * _LOG_2PI + log_det_cov + maha)
+
+def capture_bw(y_obs, y_hat, frac):
+    n = len(y_obs)
+    d = np.sort(np.abs(y_obs - y_hat))
+    p = (np.arange(n, dtype=np.float_) + 1) / n
+    return d[np.searchsorted(p, frac)]
+
