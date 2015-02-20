@@ -63,7 +63,7 @@ class Matern32Covariance(Covariance):
         if x2 is None:
             x2 = x1
 
-        r = col_vec(x1) - row_vec(x2)
+        r = np.abs(col_vec(x1) - row_vec(x2))
         l = self.lengthscale
         return ((1 + np.sqrt(3) * r / l) *
                 np.exp(- np.sqrt(3) * r / l))
@@ -77,7 +77,7 @@ class Matern52Covariance(Covariance):
         if x2 is None:
             x2 = x1
 
-        r = col_vec(x1) - row_vec(x2)
+        r = np.abs(col_vec(x1) - row_vec(x2))
         l = self.lengthscale
         return ((1 + np.sqrt(5) * r / l + 5 * r ** 2 / 3 / (l ** 2)) *
                 np.exp(- np.sqrt(5) * r / l))
