@@ -8,6 +8,7 @@ __all__ = [
     'add_covariates',
     'truncate_trajectory',
     'predictive_contexts',
+    'capture_bw',
     'Subtype_Model',
     'MarginalizedSubtypeMixture'
 ]
@@ -26,4 +27,5 @@ from .util import (Trajectory,
                    make_trajectories,
                    add_covariates,
                    truncate_trajectory,
-                   predictive_contexts)
+                   predictive_contexts,
+                   capture_bw)
