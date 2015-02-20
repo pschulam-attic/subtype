@@ -2,6 +2,7 @@ __all__ = [
     'Basis',
     'DiagonalCovariance',
     'RandomInterceptCovariance',
+    'SquaredExpCovariance',
     'CompositeCovariance',
     'Trajectory',
     'make_trajectories',
@@ -17,6 +18,7 @@ from .basis import Basis
 
 from .covariance import (DiagonalCovariance,
                          RandomInterceptCovariance,
+                         SquaredExpCovariance,
                          CompositeCovariance)
 
 from .subtype_model import SubtypeMixture
