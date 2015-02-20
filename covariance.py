@@ -55,6 +55,34 @@ class SquaredExpCovariance(Covariance):
         return self.amplitude * np.exp(k)
 
 
+class Matern32Covariance(Covariance):
+    def __init__(self, lengthscale):
+        self.lengthscale = lengthscale
+
+    def __call__(self, x1, x2=None):
+        if x2 is None:
+            x2 = x1
+
+        r = col_vec(x1) - row_vec(x2)
+        l = self.lengthscale
+        return ((1 + np.sqrt(3) * r / l) *
+                np.exp(- np.sqrt(3) * r / l))
+
+
+class Matern52Covariance(Covariance):
+    def __init__(self, lengthscale):
+        self.lengthscale = lengthscale
+
+    def __call__(self, x1, x2=None):
+        if x2 is None:
+            x2 = x1
+
+        r = col_vec(x1) - row_vec(x2)
+        l = self.lengthscale
+        return ((1 + np.sqrt(5) * r / l + 5 * r ** 2 / 3 / (l ** 2)) *
+                np.exp(- np.sqrt(5) * r / l))
+
+
 class CompositeCovariance(Covariance):
     def __init__(self, *components):
         self.components = components

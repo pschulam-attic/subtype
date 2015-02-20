@@ -3,6 +3,8 @@ __all__ = [
     'DiagonalCovariance',
     'RandomInterceptCovariance',
     'SquaredExpCovariance',
+    'Matern32Covariance',
+    'Matern52Covariance',
     'CompositeCovariance',
     'Trajectory',
     'make_trajectories',
@@ -19,6 +21,8 @@ from .basis import Basis
 from .covariance import (DiagonalCovariance,
                          RandomInterceptCovariance,
                          SquaredExpCovariance,
+                         Matern32Covariance,
+                         Matern52Covariance,
                          CompositeCovariance)
 
 from .subtype_model import SubtypeMixture
