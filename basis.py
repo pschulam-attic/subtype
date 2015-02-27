@@ -1,4 +1,7 @@
+import numpy as np
+
 from patsy import dmatrix
+
 
 class Basis:
     def __init__(self, lower, upper, knots, degree):
@@ -18,6 +21,13 @@ class Basis:
         knots = ', '.join(str(k) for k in self.knots)
         f = 'bs(x, knots=[{}], degree={}, lower_bound={}, upper_bound={})'
         return f.format(knots, self.degree, self.lower, self.upper)
+
+    @property
+    def penalty(self):
+        P = np.zeros((self.df, self.df))
+        D = np.diff(np.eye(self.df - 1), 1)
+        P[1:, 1:] = D.dot(D.T)
+        return P
 
     def __call__(self, x):
         return dmatrix(self.formula)
