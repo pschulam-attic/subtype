@@ -1,8 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.stats as stats
+import pandas as pd
 
 from collections import namedtuple
-from numpy.linalg import cholesky, inv, slogdet
+from numpy.linalg import cholesky, inv, slogdet, solve
 from patsy import dmatrix
 
 
@@ -77,11 +79,26 @@ class ConditionalPredictor:
         y_new = self.model.predict(t_new, self.trajectory)
         return y_new
 
+    def confidence_bands(self, t_new, nsim=1000):
+        samples = np.zeros((nsim, len(t_new)))
+        qz = self.model.posterior(self.trajectory)
+
+        C11 = self.model.cov(t_new)
+        C12 = self.model.cov(t_new, self.trajectory.t)
+        C22 = self.model.cov(self.trajectory.t)
+        C = C11 - C12.dot(solve(C22, C12.T))
+
+        s = stats.multivariate_normal.rvs(cov=C, size=nsim)
+        l, u = np.percentile(s, [2.5, 97.5], axis=0)
+        
+        return l, u
+
     def plot(self, ax=None, *args, **kwargs):
         lower = self.model.basis.lower
         upper = self.model.basis.upper
         t_grid = np.linspace(lower, upper, 100)
         y_grid = self.predict(t_grid)
+        l_grid, u_grid = y_grid + self.confidence_bands(t_grid)
 
         if ax is None:
             fig, ax = plt.subplots(*args, **kwargs)
@@ -91,6 +108,8 @@ class ConditionalPredictor:
             
         ax.plot(self.trajectory.t, self.trajectory.y, 'xb', label='Observed')
         ax.plot(t_grid, y_grid, '-r', label='Predicted')
+        ax.plot(t_grid, l_grid, '-.r', label='95% Lower')
+        ax.plot(t_grid, u_grid, '-.r', label='95% Upper')
 
         return fig, ax
 
@@ -111,4 +130,53 @@ def capture_bw(y_obs, y_hat, frac):
     d = np.sort(np.abs(y_obs - y_hat))
     p = (np.arange(n, dtype=np.float_) + 1) / n
     return d[np.searchsorted(p, frac)]
+
+
+def confusion_matrix(model, trajectories, censoring_time):
+    true_subtype = np.zeros(len(trajectories))
+    pred_subtype = np.zeros(len(trajectories))
+    cmat = np.zeros((model.nsubtypes, model.nsubtypes))    
+
+    for i, trj in enumerate(trajectories):
+        trunc = truncate_trajectory(trj, censoring_time=censoring_time)
+        if len(trunc.t) < 1:
+            continue
+        true_z = np.argmax(model.posterior(trj))
+        pred_z = np.argmax(model.posterior(trunc))
+        cmat[true_z, pred_z] += 1
+
+    return cmat / np.atleast_2d(cmat.sum(axis=1)).T
+
+
+def make_all_predictions(model, trajectories):
+    all_predictions = {}
+    for trj in trajectories:
+        for obs, tnew, ynew in predictive_contexts(trj):
+            yhat = model.conditional(obs).predict(tnew)
+            nobs = len(obs.t)
+            all_predictions[(trj.key, nobs)] = (obs, tnew, ynew, yhat)
+
+    return all_predictions
+
+
+def prediction_summary(all_predictions):
+    def bucket_coverage(x):
+        m = max(np.ceil(np.max(x)), 1)
+        b = np.linspace(0, m, 2 * m + 1)
+        h, _ = np.histogram(x, bins=b)
+        return np.mean(h > 0)
+
+    summary = []
+    
+    for obs, tnew, ynew, yhat in all_predictions.values():
+        frontier = max(1, np.ceil(obs.t[-1]))
+        coverage = np.round(bucket_coverage(obs.t), 1)
+        year_of_care = np.ceil(tnew)
+
+        for yoc, yn, yh in zip(year_of_care, ynew, yhat):
+            summary.append((frontier, yoc, coverage, yn, yh, yn-yh, np.abs(yn-yh)))
+
+    s = pd.DataFrame(list(zip(*summary))).T
+    s.columns = ['frontier', 'year_of_care', 'coverage', 'ynew', 'yhat', 'residual', 'error']
+    return s
 

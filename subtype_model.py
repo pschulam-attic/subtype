@@ -10,17 +10,21 @@ from patsy import dmatrix
 from scipy.linalg import solve
 from scipy.misc import logsumexp
 
+from .covariance import DiagonalCovariance
 from .logistic_regression import LogisticRegression
 from .util import ConditionalPredictor, Trajectory
 
 
 class SubtypeMixture:
-    def __init__(self, nsubtypes, ncovariates, basis_fn, cov_fn, reg=None):
+    def __init__(self, nsubtypes, ncovariates, basis_fn, cov_fn, reg=None, marginal_reg=0.0):
         self.nsubtypes = nsubtypes
         self.ncovariates = ncovariates
         self.basis = basis_fn
         self.cov = cov_fn
         self.reg = reg
+        self.subtype_marginal = LogisticRegression(self.nsubtypes,
+                                                   self.ncovariates,
+                                                   marginal_reg)
         self._init_params()
 
     def __copy__(self):
@@ -28,8 +32,6 @@ class SubtypeMixture:
             self.nsubtypes, self.ncovariates, copy(self.basis), copy(self.cov))
 
     def _init_params(self):
-        self.subtype_marginal = LogisticRegression(
-            self.nsubtypes, self.ncovariates)
         self.coef = np.zeros((self.nsubtypes, self.basis.df))
 
     def loglik(self, trajectory, z, X=None, C=None):
@@ -57,21 +59,42 @@ class SubtypeMixture:
         qz = np.exp(all_loglik - marg_loglik)
         return qz
 
-    def predict(self, t_new, trajectory):
+    def subtype_predict(self, t_new, trajectory, z):
         X_new = self.basis(t_new)
         X_obs = self.basis(trajectory.t)
         y_obs = trajectory.y
         C1 = self.cov(t_new, trajectory.t)
         C2 = self.cov(trajectory.t)
+
+        m1 = X_new.dot(self.coef[z]).ravel()
+        m2 = X_obs.dot(self.coef[z]).ravel()
+        y_new = m1 + C1.dot(solve(C2, y_obs - m2)).ravel()
+        return y_new
+
+    def predict(self, t_new, trajectory):
+        y_new = np.zeros_like(t_new)        
         qz = self.posterior(trajectory)
-        y_new = np.zeros_like(t_new)
 
         for z, w in enumerate(qz):
-            m1 = X_new.dot(self.coef[z]).ravel()
-            m2 = X_obs.dot(self.coef[z]).ravel()
-            y_new += w * (m1 + C1.dot(solve(C2, y_obs - m2)).ravel())
+            y_new += w * self.subtype_predict(t_new, trajectory, z)
 
         return y_new
+
+    # def predict(self, t_new, trajectory):
+    #     X_new = self.basis(t_new)
+    #     X_obs = self.basis(trajectory.t)
+    #     y_obs = trajectory.y
+    #     C1 = self.cov(t_new, trajectory.t)
+    #     C2 = self.cov(trajectory.t)
+    #     qz = self.posterior(trajectory)
+    #     y_new = np.zeros_like(t_new)
+
+    #     for z, w in enumerate(qz):
+    #         m1 = X_new.dot(self.coef[z]).ravel()
+    #         m2 = X_obs.dot(self.coef[z]).ravel()
+    #         y_new += w * (m1 + C1.dot(solve(C2, y_obs - m2)).ravel())
+
+    #     return y_new
 
     def conditional(self, trajectory):
         return ConditionalPredictor(self, trajectory)
@@ -101,12 +124,13 @@ class SubtypeMixture:
         covariates = np.vstack(covariates)
         qz = stats.dirichlet.rvs(self.nsubtypes * [0.1], len(trajectories))
 
-        dev_cache = OrderedDict()
+        if devset is not None:
+            dev_cache = OrderedDict()
 
-        for trj in devset:
-            X = self.basis(trj.t)
-            C = self.cov(trj.t)
-            dev_cache[trj.key] = self.TrajectoryData(X, C, None, None)
+            for trj in devset:
+                X = self.basis(trj.t)
+                C = self.cov(trj.t)
+                dev_cache[trj.key] = self.TrajectoryData(X, C, None, None)
 
         ## EM iterations start here.
 
@@ -166,8 +190,28 @@ class SubtypeMixture:
             msg = msg.format(iteration, logl[iteration], dev_ll, abs_delta)
             logging.info(msg)
 
+            msg = ['N({})={{:.2f}}'.format(k) for k in range(self.nsubtypes)]
+            msg = ' '.join(msg)
+            msg = msg.format(*list(qz.sum(axis=0)))
+            logging.debug(msg)
+
             if iteration >= max_iter or abs_delta < tol:
                 break
+
+        # n = 0.0
+        # rss = 0.0
+
+        # for trj in trajectories:
+        #     n += len(trj.t)
+        #     qz = self.posterior(trj)
+
+        #     for z, w in enumerate(qz):
+        #         r = trj.y - self.subtype_predict(trj.t, trj, z)
+        #         rss += w * np.sum(r ** 2)
+
+        # for c in self.cov.components:
+        #     if isinstance(c, DiagonalCovariance):
+        #         c.variance = rss / n
 
         return self
 
@@ -207,3 +251,17 @@ class SubtypeMixture:
 
         return fig
 
+    def plot_fits(self, trajectories):
+        n = len(trajectories)
+        ncol = int(np.ceil(np.sqrt(4.0 / 3.0 * n)))
+        nrow = int(np.ceil(n / float(ncol)))
+        fig, axes = plt.subplots(nrow, ncol)
+
+        for i, trj in enumerate(trajectories):
+            cp = self.conditional(trj)
+            ax = axes[np.unravel_index(i, (nrow, ncol))]
+            cp.plot(ax=ax)
+            ax.set_xlim(self.basis.lower, self.basis.upper)
+            ax.set_ylim(0, 120)
+
+        return fig

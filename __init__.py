@@ -5,6 +5,7 @@ __all__ = [
     'SquaredExpCovariance',
     'Matern32Covariance',
     'Matern52Covariance',
+    'OUCovariance',
     'CompositeCovariance',
     'Trajectory',
     'make_trajectories',
@@ -12,6 +13,9 @@ __all__ = [
     'truncate_trajectory',
     'predictive_contexts',
     'capture_bw',
+    'confusion_matrix',
+    'make_all_predictions',
+    'prediction_summary',
     'Subtype_Model',
     'MarginalizedSubtypeMixture'
 ]
@@ -23,6 +27,7 @@ from .covariance import (DiagonalCovariance,
                          SquaredExpCovariance,
                          Matern32Covariance,
                          Matern52Covariance,
+                         OUCovariance,
                          CompositeCovariance)
 
 from .subtype_model import SubtypeMixture
@@ -34,4 +39,8 @@ from .util import (Trajectory,
                    add_covariates,
                    truncate_trajectory,
                    predictive_contexts,
-                   capture_bw)
+                   capture_bw,
+                   confusion_matrix,
+                   make_all_predictions,
+                   prediction_summary)
+

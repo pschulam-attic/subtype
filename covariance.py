@@ -56,7 +56,8 @@ class SquaredExpCovariance(Covariance):
 
 
 class Matern32Covariance(Covariance):
-    def __init__(self, lengthscale):
+    def __init__(self, amplitude, lengthscale):
+        self.amplitude = amplitude
         self.lengthscale = lengthscale
 
     def __call__(self, x1, x2=None):
@@ -65,12 +66,13 @@ class Matern32Covariance(Covariance):
 
         r = np.abs(col_vec(x1) - row_vec(x2))
         l = self.lengthscale
-        return ((1 + np.sqrt(3) * r / l) *
-                np.exp(- np.sqrt(3) * r / l))
+        return self.amplitude * ((1 + np.sqrt(3) * r / l) *
+                                 np.exp(- np.sqrt(3) * r / l))
 
 
 class Matern52Covariance(Covariance):
-    def __init__(self, lengthscale):
+    def __init__(self, amplitude, lengthscale):
+        self.amplitude = amplitude
         self.lengthscale = lengthscale
 
     def __call__(self, x1, x2=None):
@@ -79,8 +81,23 @@ class Matern52Covariance(Covariance):
 
         r = np.abs(col_vec(x1) - row_vec(x2))
         l = self.lengthscale
-        return ((1 + np.sqrt(5) * r / l + 5 * r ** 2 / 3 / (l ** 2)) *
+        return (self.amplitude *
+                (1 + np.sqrt(5) * r / l + 5 * r ** 2 / 3 / (l ** 2)) *
                 np.exp(- np.sqrt(5) * r / l))
+
+
+class OUCovariance(Covariance):
+    def __init__(self, amplitude, lengthscale):
+        self.amplitude = amplitude
+        self.lengthscale = lengthscale
+
+    def __call__(self, x1, x2=None):
+        if x2 is None:
+            x2 = x1
+
+        r = np.abs(col_vec(x1) - row_vec(x2))
+        l = self.lengthscale
+        return self.amplitude * np.exp(- r / l)
 
 
 class CompositeCovariance(Covariance):

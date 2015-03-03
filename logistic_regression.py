@@ -1,12 +1,14 @@
 import numpy as np
 
 from scipy.optimize import fmin_bfgs
+from scipy.misc import logsumexp
 
 
 class LogisticRegression:
-    def __init__(self, noutcomes, npredictors):
+    def __init__(self, noutcomes, npredictors, penalty=0.0):
         self.noutcomes = noutcomes
         self.npredictors = npredictors
+        self.penalty = penalty
         self._init_params()
 
     def _init_params(self):
@@ -15,8 +17,8 @@ class LogisticRegression:
 
     def fit(self, X, y):
         p = self.npredictors
-        f = lambda w: -logistic_loglik(w.reshape((-1, p)), X, y)
-        g = lambda w: -logistic_loglik_grad(w.reshape((-1, p)), X, y).ravel()
+        f = lambda w: -logistic_loglik(w.reshape((-1, p)), X, y) + self.penalty * w.dot(w)
+        g = lambda w: -logistic_loglik_grad(w.reshape((-1, p)), X, y).ravel() + 2 * self.penalty * w.sum()
 
         solution = fmin_bfgs(f, self.weights.ravel().copy(), g, disp=False)
         self.weights = solution.reshape((-1, p))
@@ -50,10 +52,10 @@ def onehot_encode(x, k):
 def logistic_predict_prob(W, x):
     k = W.shape[0] + 1
 
-    p = np.ones(k)
-    p[:-1] = np.exp(W.dot(x.ravel()))
-    p /= p.sum()
-
+    lp = np.zeros(k)
+    lp[:-1] = W.dot(x.ravel())
+    p = np.exp(lp - logsumexp(lp))
+    
     return p
 
 
